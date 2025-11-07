@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:my_dosbox_gui/utils.dart';
 
 import 'config_list_screen.dart';
 
@@ -45,7 +46,29 @@ class DOSBoxLauncherApp extends StatelessWidget {
     return MaterialApp(
       title: 'DOSBox Launcher',
       theme: ThemeData.dark(),
-      home: const ConfigListScreen(configDir: '/home/youruser/dosconfigs'),
+      home:  FutureBuilder<String?>(
+        future: loadConfigPath(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          } else if (snapshot.hasError) {
+            return Scaffold(
+              body: Center(child: Text('Error: ${snapshot.error}')),
+            );
+          } else {
+            final path = snapshot.data;
+            if (path == null) {
+              return const Scaffold(
+                body: Center(child: Text('No config path found!')),
+              );
+            } else {
+              return ConfigListScreen(rootDir: path);
+            }
+          }
+        },
+      ),
     );
   }
 }

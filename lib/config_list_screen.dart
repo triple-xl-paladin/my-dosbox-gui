@@ -33,19 +33,27 @@ class _ConfigListScreenState extends State<ConfigListScreen> {
       return;
     }
 
-    final files = dir
-        .listSync(recursive: true)
-        .whereType<File>()
-        .where((f) => f.path.toLowerCase().endsWith('.conf'))
-        .map((f) => ConfigEntry(
-      name: f.uri.pathSegments.last.replaceAll('.conf', ''),
-      path: f.path,
-    ))
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name)); // alphabetic sort
+    List<ConfigEntry> confFiles = [];
+
+    try {
+      confFiles = dir
+          .listSync(recursive: true, followLinks: false)
+          .whereType<File>()
+          .where((f) => f.path.toLowerCase().endsWith('.conf'))
+          .map((f) =>
+          ConfigEntry(
+            name: f.uri.pathSegments.last.replaceAll('.conf', ''),
+            path: f.path,
+          ))
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name)); // alphabetic sort
+    } catch (e) {
+      debugPrint('Error reading config directory: $e');
+
+    }
 
     setState(() {
-      _configs = files;
+      _configs = confFiles;
       _isLoading = false;
     });
   }
