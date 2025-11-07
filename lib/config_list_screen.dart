@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'config_entry.dart';
 
 class ConfigListScreen extends StatefulWidget {
-  final String configDir;
+  final String rootDir;
 
-  const ConfigListScreen({super.key, required this.configDir});
+  const ConfigListScreen({super.key, required this.rootDir});
 
   @override
   State<ConfigListScreen> createState() => _ConfigListScreenState();
@@ -13,6 +13,7 @@ class ConfigListScreen extends StatefulWidget {
 
 class _ConfigListScreenState extends State<ConfigListScreen> {
   List<ConfigEntry> _configs = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -20,64 +21,77 @@ class _ConfigListScreenState extends State<ConfigListScreen> {
     _loadConfigs();
   }
 
-  void _loadConfigs() {
-    final dir = Directory(widget.configDir);
-    if (!dir.existsSync()) return;
-    final files = dir
-        .listSync()
-        .where((f) => f.path.endsWith('.conf'))
-        .map((f) => ConfigEntry(
-      name: f.uri.pathSegments.last.replaceAll('.conf', ''),
-      path: f.path,
-    ))
-        .toList();
-    setState(() => _configs = files);
-  }
+  Future<void> _loadConfigs() async {
+    setState(() => _isLoading = true);
 
-  void _loadConfigsScan() {
-    final dir = Directory(widget.configDir);
-    if (!dir.existsSync()) return;
+    final dir = Directory(widget.rootDir);
+    if (!dir.existsSync()) {
+      setState(() {
+        _configs = [];
+        _isLoading = false;
+      });
+      return;
+    }
 
     final files = dir
         .listSync(recursive: true)
-        .where((f) => f is File && f.path.endsWith('.conf'))
+        .whereType<File>()
+        .where((f) => f.path.toLowerCase().endsWith('.conf'))
         .map((f) => ConfigEntry(
       name: f.uri.pathSegments.last.replaceAll('.conf', ''),
       path: f.path,
     ))
-        .toList();
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name)); // alphabetic sort
 
-    setState(() => _configs = files);
+    setState(() {
+      _configs = files;
+      _isLoading = false;
+    });
   }
 
   void _launchGame(ConfigEntry entry) async {
-    final result = await Process.start(
-      'dosbox',
-      ['-conf', entry.path],
-      mode: ProcessStartMode.detached,
-    );
-    // You could log or handle errors here if needed.
+    try {
+      await Process.start(
+        'dosbox',
+        ['-conf', entry.path],
+        mode: ProcessStartMode.detached,
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error launching ${entry.name}: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('DOSBox Game Launcher')),
-      body: ListView.builder(
+      appBar: AppBar(
+        title: const Text('DOSBox Game Launcher'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadConfigs,
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _configs.isEmpty
+          ? const Center(child: Text('No config files found'))
+          : ListView.builder(
         itemCount: _configs.length,
         itemBuilder: (context, index) {
           final entry = _configs[index];
           return ListTile(
             title: Text(entry.name),
             subtitle: Text(entry.path),
+            leading: const Icon(Icons.insert_drive_file),
             trailing: const Icon(Icons.play_arrow),
             onTap: () => _launchGame(entry),
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _loadConfigs,
-        child: const Icon(Icons.refresh),
       ),
     );
   }
